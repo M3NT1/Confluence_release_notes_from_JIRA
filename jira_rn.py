@@ -144,46 +144,6 @@ def connect_to_jira(jira_url, pat_token, log):
         return None
 
 
-def format_bold_until_colon(text):
-    # Az összes bullet listát és a minden bullet pont előtt kettőspontig tartó részt félkövérré alakítja
-    lines = text.split('<br />')
-    formatted_lines = []
-    for line in lines:
-        parts = line.split(':', 1)
-        if len(parts) > 1:
-            formatted_lines.append(f"<li><strong>{parts[0]}:</strong>{parts[1]}</li>")
-        else:
-            # kezeljük azt az esetet, ha nincs kettőspont
-            formatted_lines.append(f"<li><strong>{line}</strong></li>")
-    return '<ul>' + ''.join(formatted_lines) + '</ul>'
-
-
-def extract_release_notes(description):
-    # "release notes" kifejezés feldolgozása kis- és nagybetű érzéketlen módon
-    pattern = r'(?i)\*release notes\*(.*)'
-    match = re.search(pattern, description, re.DOTALL)
-    if match:
-        # Kivágjuk a Release Notes részt limit nélkül
-        release_notes = match.group(1).strip()
-        # Formázzuk a szöveget HTML-re
-        release_notes = html.escape(release_notes).replace('\n', '<br />')
-        return format_bold_until_colon(release_notes)
-    # Alapértelmezett bullet pontos lista, HTML formátumban és félkövérrel az első ":" - ig
-    default_notes = (
-        "<ul>"
-        "<li><strong>Fejlesztés/javítás leírása:</strong></li>"
-        "<li><strong>Érintett felhasználói kör:</strong></li>"
-        "<li><strong>Fejlesztés/javítás eredménye:</strong></li>"
-        "<li><strong>Új elemi jog:</strong></li>"
-        "<li><strong>Új menüpont:</strong></li>"
-        "<li><strong>Új eljárástípus:</strong></li>"
-        "<li><strong>Tesztelés:</strong></li>"
-        "<li><strong>Ismert hibák:</strong></li>"
-        "</ul>"
-    )
-    return default_notes
-
-
 def extract_web_links(issue):
     web_links = []
     if hasattr(issue.fields, 'issuelinks'):
@@ -223,8 +183,18 @@ def fetch_jira_issues(jira, jql_query, is_filter, jira_url, log):
 
         issue_data = []
         for idx, issue in enumerate(issues):
-            description = issue.fields.description if issue.fields.description else ""
-            release_notes = extract_release_notes(description)
+            # Verzió információ mező kezelése
+            version_info = getattr(issue.fields, 'customfield_13240', None)
+            if version_info is None or version_info.strip() in ['-', '–', '_', '—']:
+                log(f"Jegy kihagyva verzió információ miatt: {issue.key}")
+                continue
+
+            if (version_info is None or not version_info.strip()
+                or version_info.strip() in ['-', '–', '_', '—']
+                or version_info.strip() == "" or len(version_info.strip()) <= 3):
+                version_info_html = "<span style='color:red'><strong>!!!KITÖLTENDŐ!!!</strong></span>"
+            else:
+                version_info_html = html.escape(version_info.strip())
 
             # Belső hivatkozások kigyűjtése csak issue linkekből
             all_links = []
@@ -250,9 +220,8 @@ def fetch_jira_issues(jira, jql_query, is_filter, jira_url, log):
             issue_info = {
                 'Summary': html.escape(issue.fields.summary),
                 'Ticket ID': f"<a href='{html.escape(jira_url + '/browse/' + issue.key)}'>{html.escape(issue.key)}</a>",
-                # Kattintható hivatkozás
                 'External Links': external_links_str,
-                'Bullet Points': release_notes,
+                'Version Info': version_info_html,
             }
             issue_data.append(issue_info)
             elapsed_time = time.time() - start_time
@@ -275,7 +244,7 @@ def generate_release_notes_table(issues, log):
     )
     table_rows = ''.join([
         f"<tr><td>{issue['Summary']}</td><td>{issue['Ticket ID']}</td><td>{issue['External Links']}</td>"
-        f"<td>{issue['Bullet Points']}</td></tr>"
+        f"<td>{issue['Version Info']}</td></tr>"
         for issue in issues
     ])
     table_footer = '</table>'
