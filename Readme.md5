@@ -2,14 +2,14 @@
 
 ## Bevezetés
 
-Ez a projekt egy JIRA Release Notes Generator, amely a JIRA keresési URL alapján lekeresi a JIRA jegyeket, kinyeri a leírásukban található "Release notes" szakaszt, majd formázva megjeleníti egy Confluence oldalon. A Confluence táblázatában minden bullet pont félkövéren kerül megjelenítésre az első kettőspontig.
+Ez a projekt egy JIRA Release Notes Generator, amely a JIRA keresési URL alapján lekeresi a JIRA jegyeket, kinyeri a verzió információs mező tartalmát, majd formázva megjeleníti egy Confluence oldalon. A Confluence táblázatában a nem megfelelően kitöltött vagy rövid verzió információ mező piros félkövér szöveggel jelenik meg, hogy felhívja a felhasználó figyelmét a hiányzó adatokra.
 
 ## Osztályok és Feladataik
 
 ### ConfigManager
 
--  **Feladata**: Kezeli a konfigurációs beállításokat, amelyek a JIRA és Confluence hitelesítő adatokat tartalmaznak, és titkosítva egy fájlba menti azokat.
--  **Metódusai**:
+-   **Feladata**: Kezeli a konfigurációs beállításokat, amelyek a JIRA és Confluence hitelesítő adatokat tartalmaznak, és titkosítva egy fájlba menti azokat.
+-   **Metódusai**:
   - `__init__(self, config_file)`: Inicializálja az osztályt a konfigurációs fájl elérési útjával.
   - `encode_data(self, data)`: Titkosítja a megadott adatokat többszörös base64 kódolással.
   - `decode_data(self, data)`: Dekódolja a base64 többszörösen kódolt adatokat.
@@ -18,8 +18,8 @@ Ez a projekt egy JIRA Release Notes Generator, amely a JIRA keresési URL alapj�
 
 ### GUIApp
 
--  **Feladata**: Grafikus felhasználói felület, ahol a felhasználó megadhatja a JIRA keresési URL-t és a verziószámot, valamint megjeleníti a műveletek naplóját és indíthatja a műveleteket.
--  **Metódusai**:
+-   **Feladata**: Grafikus felhasználói felület, ahol a felhasználó megadhatja a JIRA keresési URL-t és a verziószámot, valamint megjeleníti a műveletek naplóját és indíthatja a műveleteket.
+-   **Metódusai**:
   - `__init__(self, root, config_manager)`: Inicializálja az osztályt és létrehozza a GUI komponenseket.
   - `ask_for_credentials(self)`: Felugró ablakokat jelenít meg a felhasználói hitelesítő adatok bekérésére, majd menti ezeket a `ConfigManager` segítségével.
   - `log(self, message)`: Naplóüzenetet helyez el a GUI szövegdobozába.
@@ -28,65 +28,27 @@ Ez a projekt egy JIRA Release Notes Generator, amely a JIRA keresési URL alapj�
 
 ### JIRA Lekérdezés és Adatfeldolgozás
 
--  **Feladata**: JIRA adatlekérdezés és -feldolgozás, mint például a "Release notes" szakasz kivonása és a releváns linkek gyűjtése.
--  **Metódusai**:
+-   **Feladata**: JIRA adatlekérdezés és -feldolgozás, mint például a verzió információs mező kivonása és a releváns linkek gyűjtése.
+-   **Metódusai**:
   - `connect_to_jira(jira_url, pat_token, log)`: Kapcsolódik a JIRA szerverhez a megadott URL és token segítségével.
-  - `extract_release_notes(description)`: Kinyeri a JIRA leírás "Release notes" szakaszát, és az első kettősponton túl félkövérre formázza.
   - `extract_web_links(issue)`: Kinyeri a JIRA jegyekhez kapcsolódó web linkeket.
   - `extract_remotelinks(jira, issue_key)`: Kinyeri a JIRA jegyekhez kapcsolódó remote linkeket.
   - `is_valid_domain(url)`: Ellenőrzi, hogy egy URL a megadott domainek valamelyikére mutat-e.
-  - `fetch_jira_issues(jira, jql_query, is_filter, jira_url, log)`: Lekérdezi a JIRA jegyeket a JQL vagy szűrő lekérdezés alapján, és kinyeri a szükséges adatokat, mint a release notes szakasz és linkek.
+  - `fetch_jira_issues(jira, jql_query, is_filter, jira_url, log)`: Lekérdezi a JIRA jegyeket a JQL vagy szűrő lekérdezés alapján, és kinyeri a szükséges adatokat, mint a verzió információ és linkek.
 
 ### Confluence Frissítés
 
--  **Feladata**: A Confluence oldal frissítése a releváns adatokkal és a release notes táblázat létrehozása.
--  **Metódusai**:
+-   **Feladata**: A Confluence oldal frissítése a releváns adatokkal és a release notes táblázat létrehozása.
+-   **Metódusai**:
   - `generate_release_notes_table(issues, log)`: Létrehozza a release notes táblázatot HTML formátumban a JIRA jegyek adataiból.
   - `update_confluence_page(url, confluence_api_token, page_id, version, table, log)`: Frissíti a megadott Confluence oldalt a release notes táblázat hozzáadásával.
   - `extract_query_from_url(url)`: Kinyeri a JQL lekérdezést vagy szűrő azonosítót a megadott JIRA keresési URL-ből.
 
-### Példakód: `extract_release_notes` és `format_bold_until_colon`
+### Verzió Információ Kezelése
 
-#### `extract_release_notes`
-```python
-def extract_release_notes(description):
-    # "release notes" kifejezés feldolgozása kis- és nagybetű érzéketlen módon
-    pattern = r'(?i)\*release notes\*(.*)'
-    match = re.search(pattern, description, re.DOTALL)
-    if match:
-        # Kivágjuk a Release Notes részt limit nélkül
-        release_notes = match.group(1).strip()
-        # Formázzuk a szöveget HTML-re
-        release_notes = html.escape(release_notes).replace('\n', '<br />')
-        return format_bold_until_colon(release_notes)
-    # Alapértelmezett bullet pontos lista, HTML formátumban és félkövérrel az első ":" - ig
-    default_notes = (
-        "<ul>"
-        "<li><strong>Fejlesztés/javítás leírása:</strong></li>"
-        "<li><strong>Érintett felhasználói kör:</strong></li>"
-        "<li><strong>Fejlesztés/javítás eredménye:</strong></li>"
-        "<li><strong>Új elemi jog:</strong></li>"
-        "<li><strong>Új menüpont:</strong></li>"
-        "<li><strong>Új eljárástípus:</strong></li>"
-        "<li><strong>Tesztelés:</strong></li>"
-        "<li><strong>Ismert hibák:</strong></li>"
-        "</ul>"
-    )
-    return default_notes
+-   **Feladata**: Az egyes JIRA jegyek "Verzió információ" mezőjének kezelése és értékelése.
+-   **Szabályai**:
+  - Ha a mező nem létezik, üres, csak egy szóközt, maximum három karaktert tartalmaz, akkor piros félkövér betűkkel jelenik meg a `!!!KITÖLTENDŐ!!!` szöveg.
+  - Ha a mező tartalma `-, –, _, –` karakterek valamelyike, akkor a jegy nem kerül be a Confluence oldalra.
 
-format_bold_until_colon
-
-def format_bold_until_colon(text):
-    # Az összes bullet listát és a minden bullet pont előtt kettőspontig tartó részt félkövérré alakítja
-    lines = text.split('<br />')
-    formatted_lines = []
-    for line in lines:
-        parts = line.split(':', 1)
-        if len(parts) > 1:
-            formatted_lines.append(f"<li><strong>{parts[0]}:</strong>{parts[1]}</li>")
-        else:
-            # kezeljük azt az esetet, ha nincs kettőspont
-            formatted_lines.append(f"<li><strong>{line}</strong></li>")
-    return '<ul>' + ''.join(formatted_lines) + '</ul>'
-
-Ez a kód biztosítja, hogy a JIRA leírásból kivágott "Release Notes" részt helyesen kinyerje, majd HTML-kódolással formázza a Confluence táblázatban, ahol minden bullet pont első kettőspontig félkövérré válik. Ha nincs "Release Notes" rész, alapértelmezett bullet listát ad vissza.
+Ez a kód biztosítja, hogy a JIRA jegyek megfelelően feldolgozásra kerüljenek, és a hiányzó vagy hibás verzió információk korrekt módon jelenjenek meg a Confluence oldalon, felhívva a figyelmet a szükséges feltöltendő adatokra.
