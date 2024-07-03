@@ -11,7 +11,6 @@ from jira import JIRA, JIRAError
 import tkinter as tk
 from tkinter import simpledialog, messagebox, scrolledtext
 
-
 class ConfigManager:
     def __init__(self, config_file):
         self.config_file = config_file
@@ -40,7 +39,6 @@ class ConfigManager:
         encrypted_data = self.encode_data(json.dumps(self.config))
         with open(self.config_file, 'w') as f:
             f.write(encrypted_data)
-
 
 class GUIApp:
     def __init__(self, root, config_manager):
@@ -73,16 +71,11 @@ class GUIApp:
 
     def ask_for_credentials(self):
         credentials = {}
-        credentials['jira_url'] = simpledialog.askstring("JIRA URL", "Add meg a JIRA URL-t:",
-                                                         initialvalue="https://jira.ulyssys.hu")
-        credentials['confluence_url'] = simpledialog.askstring("Confluence URL", "Add meg a Confluence URL-t:",
-                                                               initialvalue="https://confluence.ulyssys.hu")
-        credentials['confluence_api_token'] = simpledialog.askstring("Confluence API token",
-                                                                     "Add meg a Confluence API tokent:")
-        credentials['confluence_page_id'] = simpledialog.askstring("Confluence Page ID",
-                                                                   "Add meg a Confluence Page ID-t:")
-        credentials['jira_pat_token'] = simpledialog.askstring("JIRA PAT token",
-                                                               "Add meg a JIRA Personal Access tokent:")
+        credentials['jira_url'] = simpledialog.askstring("JIRA URL", "Add meg a JIRA URL-t:", initialvalue="https://jira.ulyssys.hu")
+        credentials['confluence_url'] = simpledialog.askstring("Confluence URL", "Add meg a Confluence URL-t:", initialvalue="https://confluence.ulyssys.hu")
+        credentials['confluence_api_token'] = simpledialog.askstring("Confluence API token","Add meg a Confluence API tokent:")
+        credentials['confluence_page_id'] = simpledialog.askstring("Confluence Page ID","Add meg a Confluence Page ID-t:")
+        credentials['jira_pat_token'] = simpledialog.askstring("JIRA PAT token","Add meg a JIRA Personal Access tokent:")
 
         self.config_manager.save_config(credentials)
 
@@ -132,7 +125,6 @@ class GUIApp:
         self.log("A Confluence oldal frissítése sikeresen befejeződött.")
         messagebox.showinfo("Siker", "A Confluence oldal frissítése sikeresen befejeződött.")
 
-
 def connect_to_jira(jira_url, pat_token, log):
     try:
         jira = JIRA(server=jira_url.rstrip('/'), token_auth=pat_token)
@@ -142,7 +134,6 @@ def connect_to_jira(jira_url, pat_token, log):
     except JIRAError as e:
         log(f"Sikertelen csatlakozás a JIRA-hoz: {e.text}")
         return None
-
 
 def extract_web_links(issue):
     web_links = []
@@ -156,7 +147,6 @@ def extract_web_links(issue):
                         web_links.append(f"<a href='{html.escape(web_link.url)}'>{html.escape(web_link.url)}</a>")
     return web_links
 
-
 def extract_remotelinks(jira, issue_key):
     try:
         remotelinks = jira.remote_links(issue_key)
@@ -168,10 +158,8 @@ def extract_remotelinks(jira, issue_key):
         print(f"Failed to fetch remote links for issue {issue_key}: {e.text}")
         return []
 
-
 def is_valid_domain(url):
     return urlparse(url).netloc.endswith(("projekt.nak.hu", "rt5.nak.hu"))
-
 
 def fetch_jira_issues(jira, jql_query, is_filter, jira_url, log):
     try:
@@ -185,14 +173,8 @@ def fetch_jira_issues(jira, jql_query, is_filter, jira_url, log):
         for idx, issue in enumerate(issues):
             # Verzió információ mező kezelése
             version_info = getattr(issue.fields, 'customfield_13240', None)
-            if version_info is None or version_info.strip() in ['-', '–', '_', '—']:
-                log(f"Jegy kihagyva verzió információ miatt: {issue.key}")
-                continue
-
-            if (version_info is None or not version_info.strip()
-                or version_info.strip() in ['-', '–', '_', '—']
-                or version_info.strip() == "" or len(version_info.strip()) <= 3):
-                version_info_html = "<span style='color:red'><strong>!!!KITÖLTENDŐ!!!</strong></span>"
+            if version_info is None or version_info.strip() in ['-', '–', '_', '—'] or len(version_info.strip()) <= 3:
+                version_info_html = "<span style='color:red'><strong>KITÖLTENDŐ!!!</strong></span>"
             else:
                 version_info_html = html.escape(version_info.strip())
 
@@ -233,7 +215,6 @@ def fetch_jira_issues(jira, jql_query, is_filter, jira_url, log):
         log(f"Sikertelen JIRA jegyek lekérése: {e.text}")
         return []
 
-
 def generate_release_notes_table(issues, log):
     start_time = time.time()
     table_header = (
@@ -251,7 +232,6 @@ def generate_release_notes_table(issues, log):
     total_time = time.time() - start_time
     log(f"Tábla generálása befejeződött {total_time:.2f}s")
     return table_header + table_rows + table_footer
-
 
 def update_confluence_page(url, confluence_api_token, page_id, version, table, log):
     start_time = time.time()
@@ -309,7 +289,6 @@ def update_confluence_page(url, confluence_api_token, page_id, version, table, l
     else:
         log(f"Sikertelen Confluence oldal frissítés: {update_response.status_code} {update_response.text}")
 
-
 def extract_query_from_url(url):
     """Lekérdezi a JQL lekérdezést vagy filter azonosítót a megadott JIRA keresési URL-ből."""
     parsed_url = urlparse(url)
@@ -319,7 +298,6 @@ def extract_query_from_url(url):
     elif 'filter' in query_params:
         return query_params.get('filter', [''])[0], True
     return '', False
-
 
 if __name__ == "__main__":
     root = tk.Tk()
