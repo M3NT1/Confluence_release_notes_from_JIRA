@@ -11,6 +11,7 @@ from jira import JIRA, JIRAError
 import time
 import re
 
+
 class ConfigManager:
     def __init__(self, config_file):
         self.config_file = config_file
@@ -40,6 +41,7 @@ class ConfigManager:
         with open(self.config_file, 'w') as f:
             f.write(encrypted_data)
 
+
 def connect_to_jira(jira_url, pat_token, log):
     try:
         jira = JIRA(server=jira_url.rstrip('/'), token_auth=pat_token)
@@ -49,6 +51,7 @@ def connect_to_jira(jira_url, pat_token, log):
     except JIRAError as e:
         log(f"Sikertelen csatlakozás a JIRA-hoz: {e.text}")
         return None
+
 
 def is_valid_domain(url):
     return urlparse(url).netloc.endswith(("projekt.nak.hu", "rt5.nak.hu"))
@@ -115,9 +118,7 @@ def fetch_jira_issues(jira, jql_query, is_filter, jira_url, log):
                 'Ticket ID': issue.key,
                 'Ticket URL': f"{jira_url}/browse/{issue.key}",
                 'External Links': all_links,
-                'Version Info': version_info,
-                'Responsible': '',
-                'Status': ''
+                'Version Info': version_info
             }
             issue_data.append(issue_info)
             elapsed_time = time.time() - start_time
@@ -129,17 +130,17 @@ def fetch_jira_issues(jira, jql_query, is_filter, jira_url, log):
     except JIRAError as e:
         log(f"Sikertelen JIRA jegyek lekérése: {e.text}")
         return []
+
+
 class GUIApp:
     def __init__(self, root, config_manager):
         self.root = root
         self.config_manager = config_manager
         self.root.title("Excel Release Notes Generator")
 
-        # Frame létrehozása a mezőknek
         input_frame = tk.Frame(root)
         input_frame.pack(padx=10, pady=5)
 
-        # Input fields
         self.url_label = tk.Label(input_frame, text="JIRA keresési URL:")
         self.url_label.pack()
         self.url_entry = tk.Entry(input_frame, width=50)
@@ -154,27 +155,23 @@ class GUIApp:
         self.date_label.pack()
         self.date_entry = tk.Entry(input_frame, width=20)
         self.date_entry.pack()
-        # Alapértelmezett dátum beállítása
         self.date_entry.insert(0, datetime.now().strftime("%Y%m%d"))
 
-        # Output field
         self.output_text = scrolledtext.ScrolledText(root, width=100, height=20)
         self.output_text.pack(padx=10, pady=5)
 
-        # Submit button
         self.submit_button = tk.Button(root, text="Generálás", command=self.run_thread)
         self.submit_button.pack(pady=5)
 
-        # Load configuration
         if not self.config_manager.load_config():
             self.ask_for_credentials()
 
     def ask_for_credentials(self):
         credentials = {}
         credentials['jira_url'] = simpledialog.askstring("JIRA URL", "Add meg a JIRA URL-t:",
-                                                        initialvalue="https://jira.ulyssys.hu")
+                                                         initialvalue="https://jira.ulyssys.hu")
         credentials['jira_pat_token'] = simpledialog.askstring("JIRA PAT token",
-                                                             "Add meg a JIRA Personal Access tokent:")
+                                                               "Add meg a JIRA Personal Access tokent:")
         self.config_manager.save_config(credentials)
 
     def log(self, message):
@@ -186,11 +183,30 @@ class GUIApp:
         thread = threading.Thread(target=self.run)
         thread.start()
 
+    def extract_field_content(self, text, field_name):
+        if not text or text == "KITÖLTENDŐ!!!":
+            return ""
+
+        # Keresési minták a különböző formátumokhoz
+        patterns = [
+            f"{field_name}:(.*?)(?=(?:Fejlesztés/javítás|Érintett felhasználói kör|Fejlesztés/javítás eredménye|Új elemi jog|Új menüpont|Új eljárástípus|Tesztelés):|\Z)",
+            f"{field_name}:(.*?)(?=\n|$)",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+            if match:
+                content = match.group(1).strip()
+                if content and content != "-":
+                    return content
+        return ""
+
     def format_version_info(self, text):
         if not text or text == "KITÖLTENDŐ!!!":
             return text
 
-        keywords = [
+        # A formázandó mezők listája
+        fields = [
             "Fejlesztés/javítás leírása",
             "Érintett felhasználói kör",
             "Fejlesztés/javítás eredménye",
@@ -200,24 +216,29 @@ class GUIApp:
             "Tesztelés"
         ]
 
+        # A szöveg sorokra bontása
         lines = text.split('\n')
         formatted_lines = []
+        current_field = None
 
         for line in lines:
             line = line.strip()
-            found_keyword = False
-            for keyword in keywords:
-                if line.startswith(f"- {keyword}:") or line == f"- {keyword}:":
-                    formatted_lines.append(f"- **{keyword}:**{line.split(':', 1)[1] if ':' in line else ''}")
-                    found_keyword = True
+            if not line:
+                continue
+
+            # Mező kezdetének keresése
+            for field in fields:
+                if line.startswith(f"{field}:"):
+                    current_field = field
+                    formatted_lines.append(f"{field}: {line.split(':', 1)[1].strip()}")
                     break
-            if not found_keyword:
-                formatted_lines.append(line)
+            else:
+                if current_field and line:
+                    formatted_lines.append(f"  {line}")
 
         return '\n'.join(formatted_lines)
 
     def generate_excel(self, issues, version, install_date):
-        # Átalakítjuk az adatokat Excel-kompatibilis formátumra
         excel_data = []
         for issue in issues:
             external_links = []
@@ -226,37 +247,50 @@ class GUIApp:
                     external_links.append(f'=HYPERLINK("{link["url"]}", "{link["title"]}")')
             external_links_str = '\n'.join(external_links) if external_links else 'N/A'
 
-            # Ticket ID hivatkozás formázása
             ticket_link = f'=HYPERLINK("{issue["Ticket URL"]}", "{issue["Ticket ID"]}")'
+            version_info = issue['Version Info']
 
-            # Megjegyzés formázása
-            formatted_version_info = self.format_version_info(issue['Version Info'])
+            # Mezők kinyerése
+            description = self.extract_field_content(version_info, "Fejlesztés/javítás leírása")
+            users = self.extract_field_content(version_info, "Érintett felhasználói kör")
+            result = self.extract_field_content(version_info, "Fejlesztés/javítás eredménye")
+
+            # Új jogok/menük/eljárástípusok külön-külön
+            new_rights = self.extract_field_content(version_info, "Új elemi jog")
+            new_menu = self.extract_field_content(version_info, "Új menüpont")
+            new_procedure = self.extract_field_content(version_info, "Új eljárástípus")
+
+            testing = self.extract_field_content(version_info, "Tesztelés")
+
+            # Formázott verzió információ
+            formatted_version_info = self.format_version_info(version_info)
 
             excel_data.append({
                 'Fejlesztés/javítás': issue['Summary'],
                 'Szállító belső issue': ticket_link,
                 'Redmine, RT jegy': external_links_str,
                 'Megjegyzés': formatted_version_info,
+                'Érintett felhasználói kör': users,
+                'Fejlesztés/javítás eredménye': result,
+                'Új elemi jog': new_rights if new_rights and new_rights != "-" else "",
+                'Új menüpont': new_menu if new_menu and new_menu != "-" else "",
+                'Új eljárástípus': new_procedure if new_procedure and new_procedure != "-" else "",
+                'Tesztelés módja': testing,
                 'Felelős': '',
                 'Státusz': ''
             })
 
-        # DataFrame létrehozása
         df = pd.DataFrame(excel_data)
-
-        # Excel fájl neve a verzió és dátum alapján
         version = version.lower().replace('v', '')
         filename = f"v{version}_{install_date}.xlsx"
 
-        # Excel fájl mentése
         writer = pd.ExcelWriter(filename, engine='xlsxwriter')
         df.to_excel(writer, sheet_name='Release Notes', index=False)
 
-        # Formázás
         workbook = writer.book
         worksheet = writer.sheets['Release Notes']
 
-        # Cellaformátumok
+        # Formátumok
         header_format = workbook.add_format({
             'bold': True,
             'bg_color': '#D9D9D9',
@@ -272,7 +306,6 @@ class GUIApp:
             'valign': 'top'
         })
 
-        # Link formátum
         link_format = workbook.add_format({
             'text_wrap': True,
             'border': 1,
@@ -281,26 +314,24 @@ class GUIApp:
             'underline': True
         })
 
-        # Megjegyzés formátum alapértelmezett és félkövér változat
-        comment_format = workbook.add_format({
-            'text_wrap': True,
-            'border': 1,
-            'valign': 'top'
-        })
+        # Módosított oszlopszélességek az új oszlopokkal
+        column_widths = {
+            'A': 40,  # Fejlesztés/javítás
+            'B': 20,  # Szállító belső issue
+            'C': 30,  # Redmine, RT jegy
+            'D': 40,  # Megjegyzés
+            'E': 30,  # Érintett felhasználói kör
+            'F': 30,  # Fejlesztés/javítás eredménye
+            'G': 30,  # Új elemi jog
+            'H': 30,  # Új menüpont
+            'I': 30,  # Új eljárástípus
+            'J': 30,  # Tesztelés módja
+            'K': 20,  # Felelős
+            'L': 15  # Státusz
+        }
 
-        bold_format = workbook.add_format({
-            'bold': True,
-            'text_wrap': True,
-            'border': 1,
-            'valign': 'top'
-        })
-        # Oszlopszélességek beállítása
-        worksheet.set_column('A:A', 40)  # Fejlesztés/javítás
-        worksheet.set_column('B:B', 20)  # Szállító belső issue
-        worksheet.set_column('C:C', 30)  # Redmine, RT jegy
-        worksheet.set_column('D:D', 40)  # Megjegyzés
-        worksheet.set_column('E:E', 20)  # Felelős
-        worksheet.set_column('F:F', 15)  # Státusz
+        for col, width in column_widths.items():
+            worksheet.set_column(f'{col}:{col}', width)
 
         # Fejléc formázása
         for col_num, value in enumerate(df.columns.values):
@@ -311,44 +342,8 @@ class GUIApp:
             for col_num in range(len(df.columns)):
                 cell_value = df.iloc[row_num, col_num]
 
-                # Hivatkozások formázása
                 if col_num in [1, 2] and str(cell_value).startswith('=HYPERLINK'):
                     worksheet.write_formula(row_num + 1, col_num, cell_value, link_format)
-                # Megjegyzés oszlop formázása
-                elif col_num == 3:  # D oszlop
-                    if cell_value and cell_value != "KITÖLTENDŐ!!!":
-                        lines = str(cell_value).split('\n')
-                        rich_text_parts = []
-
-                        for line in lines:
-                            if '**' in line:
-                                # A sor részekre bontása a ** jelölők mentén
-                                parts = line.split('**')
-                                for i, part in enumerate(parts):
-                                    if i % 2 == 0:  # Normál szöveg
-                                        if part:
-                                            rich_text_parts.append({'text': part, 'format': comment_format})
-                                    else:  # Félkövér szöveg
-                                        if part:
-                                            rich_text_parts.append({'text': part, 'format': bold_format})
-                            else:
-                                rich_text_parts.append({'text': line, 'format': comment_format})
-                            # Sortörés hozzáadása minden sor végéhez, kivéve az utolsót
-                            if line != lines[-1]:
-                                rich_text_parts.append({'text': '\n', 'format': comment_format})
-
-                        # Rich text írása a cellába
-                        try:
-                            rich_text_args = []
-                            for part in rich_text_parts:
-                                rich_text_args.extend([part['text'], part['format']])
-                            worksheet.write_rich_string(row_num + 1, col_num, *rich_text_args)
-                        except Exception as e:
-                            # Fallback: egyszerű szöveg írása hiba esetén
-                            plain_text = ''.join(part['text'] for part in rich_text_parts)
-                            worksheet.write(row_num + 1, col_num, plain_text, comment_format)
-                    else:
-                        worksheet.write(row_num + 1, col_num, cell_value, comment_format)
                 else:
                     worksheet.write(row_num + 1, col_num, cell_value, cell_format)
 
@@ -364,7 +359,6 @@ class GUIApp:
         version = self.version_entry.get()
         install_date = self.date_entry.get()
 
-        # Dátum formátum ellenőrzése
         if not re.match(r'^\d{8}$', install_date):
             self.log("Hibás dátum formátum. Használja a YYYYMMDD formátumot.")
             messagebox.showerror("Hiba", "Hibás dátum formátum. Használja a YYYYMMDD formátumot.")
@@ -400,7 +394,6 @@ class GUIApp:
 
     @staticmethod
     def extract_query_from_url(url):
-        """Lekérdezi a JQL lekérdezést vagy filter azonosítót a megadott JIRA keresési URL-ből."""
         parsed_url = urlparse(url)
         query_params = parse_qs(parsed_url.query)
         if 'jql' in query_params:
