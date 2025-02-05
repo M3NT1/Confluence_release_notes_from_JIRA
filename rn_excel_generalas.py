@@ -269,7 +269,7 @@ class GUIApp:
                 'Fejlesztés/javítás': issue['Summary'],
                 'Szállító belső issue': ticket_link,
                 'Redmine, RT jegy': external_links_str,
-                'Megjegyzés': formatted_version_info,
+                'Fejlesztés/javítás leírása': formatted_version_info,
                 'Érintett felhasználói kör': users,
                 'Fejlesztés/javítás eredménye': result,
                 'Új elemi jog': new_rights if new_rights and new_rights != "-" else "",
@@ -285,10 +285,41 @@ class GUIApp:
         filename = f"v{version}_{install_date}.xlsx"
 
         writer = pd.ExcelWriter(filename, engine='xlsxwriter')
+
+        # Release Notes munkalap létrehozása
         df.to_excel(writer, sheet_name='Release Notes', index=False)
 
         workbook = writer.book
         worksheet = writer.sheets['Release Notes']
+
+        # Data munkalap létrehozása
+        data_worksheet = workbook.add_worksheet('data')
+
+        # Értékkészletek definiálása kezdeti értékekkel
+        felelős_list = [
+            'Csernyánszki-Hermann Zsófia',
+            'Félegyházi Viki',
+            'Göndöcs Szilvi',
+            'Kollár Tamás',
+            'Sárközi Anna'
+        ]
+
+        status_list = [
+            'Folyamatban',
+            'Hibás',
+            'Élesíthető'
+        ]
+
+        # Oszlopfejlécek a data munkalapon
+        data_worksheet.write(0, 0, 'Felelős', workbook.add_format({'bold': True}))
+        data_worksheet.write(0, 1, 'Státusz', workbook.add_format({'bold': True}))
+
+        # Értékkészletek írása a data munkalapra
+        for idx, value in enumerate(felelős_list, start=1):
+            data_worksheet.write(idx, 0, value)
+
+        for idx, value in enumerate(status_list, start=1):
+            data_worksheet.write(idx, 1, value)
 
         # Formátumok
         header_format = workbook.add_format({
@@ -314,12 +345,12 @@ class GUIApp:
             'underline': True
         })
 
-        # Módosított oszlopszélességek az új oszlopokkal
+        # Oszlopszélességek beállítása
         column_widths = {
             'A': 40,  # Fejlesztés/javítás
             'B': 20,  # Szállító belső issue
             'C': 30,  # Redmine, RT jegy
-            'D': 40,  # Megjegyzés
+            'D': 40,  # Fejlesztés/javítás leírása
             'E': 30,  # Érintett felhasználói kör
             'F': 30,  # Fejlesztés/javítás eredménye
             'G': 30,  # Új elemi jog
@@ -333,9 +364,29 @@ class GUIApp:
         for col, width in column_widths.items():
             worksheet.set_column(f'{col}:{col}', width)
 
-        # Fejléc formázása
+        # Data worksheet oszlopszélességek
+        data_worksheet.set_column('A:A', 30)
+        data_worksheet.set_column('B:B', 15)
+
+        # Fejléc formázása a Release Notes munkalapon
         for col_num, value in enumerate(df.columns.values):
             worksheet.write(0, col_num, value, header_format)
+
+        # Adatérvényesítés beállítása a Felelős oszlophoz
+        worksheet.data_validation(f'K2:K{len(df) + 1}', {
+            'validate': 'list',
+            'source': '=INDIRECT("data!$A$2:$A$1000")',  # Dinamikus tartomány az A oszlopra
+            'input_title': 'Felelős választása',
+            'input_message': 'Válasszon a listából'
+        })
+
+        # Adatérvényesítés beállítása a Státusz oszlophoz
+        worksheet.data_validation(f'L2:L{len(df) + 1}', {
+            'validate': 'list',
+            'source': '=INDIRECT("data!$B$2:$B$1000")',  # Dinamikus tartomány a B oszlopra
+            'input_title': 'Státusz választása',
+            'input_message': 'Válasszon a listából'
+        })
 
         # Cellák formázása
         for row_num in range(len(df)):
