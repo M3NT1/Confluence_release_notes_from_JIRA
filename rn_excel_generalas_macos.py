@@ -230,12 +230,22 @@ class GUIApp:
         if not text or text == "KITÖLTENDŐ!!!":
             return ""
 
-        # Keresési minták a különböző formátumokhoz
-        patterns = [
-            f"{field_name}:(.*?)(?=(?:Fejlesztés/javítás|Érintett felhasználói kör|Fejlesztés/javítás eredménye|Új elemi jog|Új menüpont|Új eljárástípus|Tesztelés):|\Z)",
-            f"{field_name}:(.*?)(?=\n|$)",
+        escaped_field_name = re.escape(field_name)
+
+        next_fields = [
+            "Fejlesztés/javítás", "Érintett felhasználói kör", "Fejlesztés/javítás eredménye", 
+            "Új elemi jog", "Új menüpont", "Új eljárástípus", 
+            "Adatbázis változás leírása", "Érintett tábla", "Érintett mező(k)", "Tesztelés"
         ]
 
+        escaped_next_fields = "|".join([re.escape(field) for field in next_fields])
+
+        # Keresési minták a különböző formátumokhoz
+        patterns = [
+            f"{escaped_field_name}:(.*?)(?=(?:{escaped_next_fields}):|\Z)",
+            f"{escaped_field_name}:(.*?)(?=\n|$)",
+        ]
+        
         for pattern in patterns:
             match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
             if match:
@@ -256,6 +266,9 @@ class GUIApp:
             "Új elemi jog",
             "Új menüpont",
             "Új eljárástípus",
+            "Adatbázis változás leírása",
+            "Érintett tábla",
+            "Érintett mező(k)",
             "Tesztelés"
         ]
 
@@ -303,6 +316,11 @@ class GUIApp:
             new_menu = self.extract_field_content(version_info, "Új menüpont")
             new_procedure = self.extract_field_content(version_info, "Új eljárástípus")
 
+            # Adatbázis változások
+            db_change_desc = self.extract_field_content(version_info, "Adatbázis változás leírása")
+            affected_table = self.extract_field_content(version_info, "Érintett tábla")
+            affected_fields = self.extract_field_content(version_info, "Érintett mező(k)")
+
             testing = self.extract_field_content(version_info, "Tesztelés")
 
             # Formázott verzió információ
@@ -318,6 +336,9 @@ class GUIApp:
                 'Új elemi jog': new_rights if new_rights and new_rights != "-" else "",
                 'Új menüpont': new_menu if new_menu and new_menu != "-" else "",
                 'Új eljárástípus': new_procedure if new_procedure and new_procedure != "-" else "",
+                'Adatbázis változás leírása': db_change_desc if db_change_desc and db_change_desc != "-" else "",
+                'Érintett tábla': affected_table if affected_table and affected_table != "-" else "",
+                'Érintett mező(k)': affected_fields if affected_fields and affected_fields != "-" else "",
                 'Tesztelés módja': testing,
                 'Felelős': '',
                 'Státusz': ''
@@ -405,9 +426,12 @@ class GUIApp:
             'G': 30,  # Új elemi jog
             'H': 30,  # Új menüpont
             'I': 30,  # Új eljárástípus
-            'J': 30,  # Tesztelés módja
-            'K': 20,  # Felelős
-            'L': 15  # Státusz
+            'J': 30,  # Adatbázis változás leírása
+            'K': 30,  # Érintett tábla
+            'L': 30,  # Érintett mező(k)
+            'M': 30,  # Tesztelés módja
+            'N': 20,  # Felelős
+            'O': 15  # Státusz
         }
 
         for col, width in column_widths.items():
@@ -422,7 +446,7 @@ class GUIApp:
             worksheet.write(0, col_num, value, header_format)
 
         # Adatérvényesítés beállítása a Felelős oszlophoz
-        worksheet.data_validation(f'K2:K{len(df) + 1}', {
+        worksheet.data_validation(f'N2:N{len(df) + 1}', {
             'validate': 'list',
             'source': '=INDIRECT("data!$A$2:$A$1000")',  # Dinamikus tartomány az A oszlopra
             'input_title': 'Felelős választása',
@@ -430,7 +454,7 @@ class GUIApp:
         })
 
         # Adatérvényesítés beállítása a Státusz oszlophoz
-        worksheet.data_validation(f'L2:L{len(df) + 1}', {
+        worksheet.data_validation(f'O2:O{len(df) + 1}', {
             'validate': 'list',
             'source': '=INDIRECT("data!$B$2:$B$1000")',  # Dinamikus tartomány a B oszlopra
             'input_title': 'Státusz választása',
