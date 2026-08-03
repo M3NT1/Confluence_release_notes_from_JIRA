@@ -22,10 +22,27 @@ params = [
     '--clean',  # Tiszta build
     '--windowed',  # Windows alkalmazás
     '--target-arch=x86_64',  # 64-bites Windows architektúra
-    # Windows-specifikus DLL-ek hozzáadása
+    # Tkinter és alapvető modulok
     '--hidden-import=tkinter',
     '--hidden-import=tkinter.ttk',
     '--hidden-import=PIL._tkinter_finder',
+    # Jaraco ve pkg_resources hiányzó modulok
+    '--collect-all=jaraco',  # Collect all jaraco namespace package files
+    '--collect-all=setuptools',  # Collect all setuptools
+    '--hidden-import=pkg_resources',
+    '--hidden-import=pkg_resources.extern',
+    # JIRA és Git modulok
+    '--collect-all=jira',
+    '--hidden-import=git',
+    '--hidden-import=git.util',
+    # XML és adatfeldolgozás
+    '--hidden-import=xml.etree.ElementTree',
+    '--hidden-import=json',
+    '--hidden-import=re',
+    '--hidden-import=threading',
+    '--hidden-import=tempfile',
+    '--hidden-import=shutil',
+    '--hidden-import=stat',
 ]
 
 # None értékek eltávolítása
